@@ -8,8 +8,8 @@ if [ ! -d vendor ]; then
     composer install --no-dev --no-interaction
 fi
 
-# Generate and persist APP_KEY on first run
-if [ ! -f .env ]; then
+# Generate and persist APP_KEY on first run, unless one was supplied by the environment
+if [ -z "${APP_KEY:-}" ] && [ ! -f .env ]; then
     echo "APP_KEY=" > .env
     php artisan key:generate --force
 fi
@@ -20,10 +20,10 @@ php artisan migrate --force -n
 # Create default admin user if none exists
 php artisan solder:setup --no-interaction
 
-# Warn if frontend assets are missing (e.g. volume-mounted source without a prior build)
-if [ ! -d public/build ]; then
-    echo "WARNING: public/build/ is missing — frontend assets have not been built."
-    echo "Run 'npm ci && npm run build' on the host or inside a Node container."
+# The source bind mount masks the image's public/build, so restore the assets baked at build time.
+if [ -d /opt/solder-assets/build ]; then
+    rm -rf public/build
+    cp -r /opt/solder-assets/build public/build
 fi
 
 # Ensure the web server can write to storage and cache

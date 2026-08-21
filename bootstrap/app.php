@@ -17,6 +17,10 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware) {
+        // Behind a TLS-terminating reverse proxy: honour X-Forwarded-* so generated
+        // URLs and redirects keep the https scheme.
+        $middleware->trustProxies(at: '*');
+
         $middleware->redirectTo(
             guests: fn () => route('login'),
             users: AppServiceProvider::HOME,

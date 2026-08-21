@@ -23,4 +23,4 @@ COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 
 WORKDIR /var/www/html
 
-COPY --from=assets /app/public/build public/build
+COPY --from=assets /app/public/build /opt/solder-assets/build
