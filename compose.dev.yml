@@ -1,3 +1,10 @@
+# Development stack owned by the technicsolder-dev Compose project. Run it on its own; do NOT merge with compose.yml:
+#   docker compose -f compose.dev.yml up -d
+# Combining the two files (-f compose.yml -f compose.dev.yml) pulls in the
+# production MariaDB service and its env-injection block, which breaks the
+# postgres dev database and test isolation.
+name: technicsolder-dev
+
 services:
   nginx:
     image: nginx
@@ -26,6 +33,10 @@ services:
 
   postgres:
     image: postgres
+    # Let host-run SolderJS share this database without exposing it to the LAN.
+    # Port 5434 avoids SolderJS's isolated integration-test PostgreSQL on 5433.
+    ports:
+      - "127.0.0.1:5434:5432"
     environment:
       - POSTGRES_DB=${DB_DATABASE:-solder}
       - POSTGRES_USER=${DB_USERNAME:-solder}
@@ -40,6 +51,10 @@ services:
 
   redis:
     image: redis
+    # Let host-run SolderJS use Redis without exposing it to the LAN.
+    # Port 6381 avoids SolderJS's isolated integration-test Redis on 6380.
+    ports:
+      - "127.0.0.1:6381:6379"
 
 volumes:
   postgres_data:

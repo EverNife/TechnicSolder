@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\ApiAuthContext;
 use App\Http\Controllers\Controller;
+use App\JavaRuntimesEnum;
 use App\Models\Build;
 use App\Models\Modpack;
 use Illuminate\Http\JsonResponse;
@@ -11,6 +12,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Request as RequestFacade;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Validation\Rule;
 
 class BuildController extends Controller
 {
@@ -50,7 +52,7 @@ class BuildController extends Controller
             return response()->json(['error' => 'Build does not exist'], 404);
         }
 
-        if (! $build->is_published || ($build->private && ! $modpack->isAccessibleBy($auth))) {
+        if (! $build->isAccessibleBy($auth)) {
             return response()->json(['error' => 'Build does not exist'], 404);
         }
 
@@ -58,13 +60,15 @@ class BuildController extends Controller
             'id' => $build->id,
             'minecraft' => $build->minecraft,
             'java' => $build->min_java,
+            'java_runtime' => $build->java_runtime,
             'memory' => $build->min_memory,
             'forge' => $build->forge,
         ];
 
         $includeFullMods = RequestFacade::input('include') === 'mods';
 
-        $mods = $build->modversions->map(function ($modversion) use ($includeFullMods) {
+        // The stable name sort preserves ascending IDs when names compare equal.
+        $mods = $build->modversions->sortBy('id')->map(function ($modversion) use ($includeFullMods) {
             return $modversion->toApiResponse($includeFullMods);
         })->sortBy('name', SORT_NATURAL | SORT_FLAG_CASE)->values();
 
@@ -86,6 +90,7 @@ class BuildController extends Controller
         $validator = Validator::make($request->all(), [
             'version' => 'required',
             'minecraft' => 'required',
+            'java_runtime' => ['nullable', 'string', Rule::enum(JavaRuntimesEnum::class)],
             'clone_from' => 'sometimes|string',
             'clone_from_modpack' => 'sometimes|string|exists:modpacks,slug',
         ]);
@@ -121,7 +126,7 @@ class BuildController extends Controller
 
         /** @var Build $build */
         $build = $modpack->builds()->create($request->only([
-            'version', 'minecraft', 'forge', 'is_published', 'private', 'min_java', 'min_memory',
+            'version', 'minecraft', 'forge', 'is_published', 'private', 'min_java', 'java_runtime', 'min_memory',
         ]));
 
         if ($cloneSource) {
@@ -150,8 +155,16 @@ class BuildController extends Controller
             return response()->json(['error' => 'Build not found.'], 404);
         }
 
+        $validator = Validator::make($request->all(), [
+            'java_runtime' => ['nullable', 'string', Rule::enum(JavaRuntimesEnum::class)],
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['error' => $validator->errors()], 422);
+        }
+
         $build->update($request->only([
-            'version', 'minecraft', 'forge', 'is_published', 'private', 'min_java', 'min_memory',
+            'version', 'minecraft', 'forge', 'is_published', 'private', 'min_java', 'java_runtime', 'min_memory',
         ]));
 
         Cache::forget('modpack:'.$slug);

@@ -8,8 +8,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <link rel="shortcut icon" href="{{ asset('favicon.ico') }}">
-    <link rel="preconnect" href="https://fonts.bunny.net">
-    <link href="https://fonts.bunny.net/css?family=inter:400,500,600,700" rel="stylesheet">
+    @fonts
     @include('partial.dark-mode-script')
     @vite(['resources/css/app.css', 'resources/js/app.js'])
     @stack('head')
@@ -84,6 +83,7 @@
                              'slug' => $mp->slug,
                              'icon_url' => $mp->icon_url ?? asset('/resources/default/icon.png'),
                              'hidden' => $mp->hidden,
+                             'private' => $mp->private,
                          ])->values()),
                          get filteredModpacks() {
                              if (!this.modpackSearch) return this.modpacks;
@@ -104,15 +104,37 @@
                            class="mt-1 text-[10px] text-slate-400">Press <kbd class="px-1 py-0.5 rounded bg-slate-700 text-slate-300">Enter</kbd> to open</p>
                     </div>
                     <template x-for="mp in filteredModpacks" :key="mp.id">
-                        <a :href="'/modpack/view/' + mp.id"
-                           class="flex items-center gap-2 pl-13 pr-5 py-1.5 text-sm text-slate-300 hover:text-white transition-colors truncate">
-                            <img :src="mp.icon_url"
-                                 class="size-4 rounded shrink-0" alt="">
-                            <span class="truncate" x-text="mp.name"></span>
-                            <template x-if="mp.hidden">
-                                <svg class="shrink-0 text-slate-400" style="width:14px;height:14px" title="Hidden" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M3.98 8.223A10.477 10.477 0 0 0 1.934 12c1.292 4.338 5.31 7.5 10.066 7.5.993 0 1.953-.138 2.863-.395M6.228 6.228A10.451 10.451 0 0 1 12 4.5c4.756 0 8.773 3.162 10.065 7.498a10.522 10.522 0 0 1-4.293 5.774M6.228 6.228 3 3m3.228 3.228 3.65 3.65m7.894 7.894L21 21m-3.228-3.228-3.65-3.65m0 0a3 3 0 1 0-4.243-4.243m4.242 4.242L9.88 9.88"/></svg>
-                            </template>
-                        </a>
+                        <div class="relative flex items-center gap-2 pl-13 pr-5 py-1.5 text-sm text-slate-300"
+                             x-data="{
+                                 statusOpen: false,
+                                 get statusLabel() {
+                                     return mp.hidden && mp.private ? 'Hidden and private' : mp.hidden ? 'Hidden' : 'Private';
+                                 }
+                             }"
+                             @click.outside="statusOpen = false"
+                             @pointerleave="if ($event.pointerType === 'mouse') statusOpen = false"
+                             @keydown.escape.stop="statusOpen = false">
+                            <a :href="'/modpack/view/' + mp.id"
+                               class="flex min-w-0 items-center gap-2 hover:text-white transition-colors">
+                                <img :src="mp.icon_url" class="size-4 rounded shrink-0" alt="">
+                                <span class="truncate" x-text="mp.name"></span>
+                            </a>
+                            <button type="button" x-show="mp.hidden || mp.private"
+                                    class="flex shrink-0 items-center gap-2 -my-1 p-1 rounded text-slate-400 hover:text-white focus-visible:outline-2 focus-visible:outline-blue-400"
+                                    :aria-label="statusLabel"
+                                    :aria-describedby="statusOpen ? 'modpack-status-' + mp.id : null"
+                                    @pointerenter="if ($event.pointerType === 'mouse') statusOpen = true"
+                                    @focus="if ($el.matches(':focus-visible')) statusOpen = true"
+                                    @blur="statusOpen = false"
+                                    @click="statusOpen = true">
+                                <x-icons.eye-slash x-show="mp.hidden" class="size-3.5 shrink-0" />
+                                <x-icons.lock-closed x-show="mp.private" class="size-3.5 shrink-0" />
+                            </button>
+                            <span x-show="statusOpen" x-cloak
+                                  :id="'modpack-status-' + mp.id" role="tooltip"
+                                  class="absolute right-5 top-full z-30 px-2 py-1 rounded bg-slate-950 text-white text-xs whitespace-nowrap shadow-lg"
+                                  x-text="statusLabel"></span>
+                        </div>
                     </template>
                     <p x-show="modpackSearch && filteredModpacks.length === 0"
                        class="pl-13 pr-5 py-1.5 text-xs text-slate-500 italic">No modpacks found.</p>

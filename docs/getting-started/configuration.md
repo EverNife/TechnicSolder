@@ -48,9 +48,11 @@
 | `MAIL_PORT` | `2525` | SMTP server port (Docker default: `587`) |
 | `MAIL_USERNAME` | (null) | SMTP username |
 | `MAIL_PASSWORD` | (null) | SMTP password |
-| `MAIL_ENCRYPTION` | (null) | SMTP encryption (`tls`, `ssl`, or null) |
+| `MAIL_SCHEME` | (unset) | Optional SMTP scheme override: `smtp` for SMTP with automatic STARTTLS when supported, or `smtps` for implicit TLS. When unset, empty, or null, Laravel selects `smtps` on port 465 and `smtp` otherwise, including in Docker. |
 | `MAIL_FROM_ADDRESS` | (null) | Sender email address |
 | `MAIL_FROM_NAME` | `${APP_NAME}` | Sender name |
+
+No `.env` migration is required for an existing working mail configuration. `MAIL_ENCRYPTION` was already unused by Laravel and may be removed as optional cleanup. Set `MAIL_SCHEME` only to override automatic selection; its accepted values are `smtp` and `smtps`, not `tls` or `ssl`.
 
 ## Solder
 
@@ -60,8 +62,9 @@
 | `SOLDER_MIRROR_URL` | `http://mods.example.com/` | Public URL the launcher uses to download mod files. Trailing slash added automatically if omitted. |
 | `SOLDER_MD5_CONNECT_TIMEOUT` | `5` | Seconds to wait when connecting for MD5 checksums |
 | `SOLDER_MD5_FILE_TIMEOUT` | `30` | Seconds to wait when computing MD5 checksums |
-| `SOLDER_DISABLE_MOD_API` | `false` | Set to `true` to disable `/api/mod` endpoints |
+| `SOLDER_DISABLE_MOD_API` | `false` | Set to `true` to disable public `/api/mod` reads; authorized manager bearer tokens retain access |
 | `SOLDER_CORS_ORIGINS` | `*` | Allowed CORS origins (comma-separated or `*` for all) |
+| `SOLDER_ADVANCED_MODE` | `false` | Set to `true` to show Mojang Java runtime overrides in build creation, editing, and details. UI only: API access and saved overrides are unaffected. |
 
 ??? note "Advanced Configuration"
 

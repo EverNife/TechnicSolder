@@ -5,8 +5,7 @@
     <title>Maintenance - Technic Solder</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="shortcut icon" href="{{ asset('favicon.ico') }}">
-    <link rel="preconnect" href="https://fonts.bunny.net">
-    <link href="https://fonts.bunny.net/css?family=inter:400,500,600,700" rel="stylesheet">
+    @fonts
     @include('partial.dark-mode-script')
     @vite(['resources/css/app.css'])
 </head>
@@ -17,7 +16,7 @@
         <p class="mt-2 text-sm text-gray-600 dark:text-gray-400">The application is currently being maintained. Please try again in a few minutes.</p>
         <div class="mt-6">
             <a href="https://github.com/TechnicPack/TechnicSolder/issues" target="_blank" rel="noopener noreferrer"
-               class="bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200 font-medium py-2 px-4 rounded-lg text-sm transition-colors">
+               class="ui-btn ui-btn-secondary">
                 Get Help
             </a>
         </div>

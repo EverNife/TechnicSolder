@@ -2,6 +2,76 @@
 
 All notable changes to Technic Solder will be documented in this file.
 
+## [Unreleased]
+
+### Added
+
+- Private modpacks now display a lock icon in the sidebar, alongside the hidden indicator when both apply. Hover, keyboard focus, or tap the status icons to show “Hidden”, “Private”, or “Hidden and private” without opening the modpack.
+
+### Changed
+
+- Consolidated repeated Blade styling into shared `ui-*` CSS classes while preserving existing layouts, light/dark themes, native controls, and Alpine behavior. Rebuild and deploy frontend assets together with the updated templates.
+
+### Fixed
+
+- Aligned the mod-version search field with Rehash All and stacked the controls on narrow screens.
+- Restored dropdown-arrow spacing for shared select controls, including the Show entries selector.
+
+## [1.4.0] - 2026-09-14
+
+### Added
+
+- Per-build Mojang Java runtime overrides in build creation, editing, details, and the read/write API (`java_runtime`). Overrides are independent of minimum Java requirements, default to normal runtime selection, and are preserved when cloning entire modpacks. Requires a database migration and LauncherV3 support before affecting launches.
+- `SOLDER_ADVANCED_MODE` (default `false`) controls visibility of Mojang Java runtime overrides in the build UI only. API behavior is unchanged, and saving a build while the control is hidden preserves its existing override.
+
+## [1.3.1] - 2026-09-09
+
+### Changed
+
+- Inter fonts are now bundled and self-hosted through Vite instead of loaded from Bunny by visitors' browsers, with Fontaine-adjusted fallback metrics to reduce layout shifts. Font updates require rebuilding and deploying the frontend assets.
+
+## [1.3.0] - 2026-09-09
+
+### Changed
+
+- Updated PHP and frontend dependencies, including Laravel 13.30.1, Debugbar 4.4.3, Larastan 3.11, Alpine.js 3.17.1, and the Node.js 24.20 build image; Guzzle remains on 7.15 pending the production PHP 8.5 upgrade.
+- Synchronized the application scaffold with `laravel/laravel` v13.10.1, including Composer lifecycle hooks, PHPUnit configuration, entrypoints, Apache XSRF header forwarding, and Vite/Tailwind defaults while retaining Solder's Docker workflow and cache/session formats.
+- Mail examples now document the optional `MAIL_SCHEME` override while preserving automatic SMTP scheme selection, including in Docker. Existing working mail configurations require no `.env` migration; the already-unused `MAIL_ENCRYPTION` variable may be removed.
+- Development PostgreSQL and Redis ports are exposed on loopback for host-run SolderJS.
+
+### Fixed
+
+- API modpack, mod, build-version, mod-version, and token listings now use ascending record IDs for deterministic ordering. Build mods retain natural, case-insensitive name ordering with mod-version IDs breaking ties.
+- API routing errors now return JSON even when a client requests HTML; web routing errors retain HTML responses.
+- The documented `APP_TIMEZONE` setting now takes effect instead of always using UTC. UTC remains the default; existing non-UTC values now affect application date handling.
+
+## [1.2.0] - 2026-08-27
+
+### Added
+
+- Bearer-token users with `mods_manage` or `solder_full` permission can read `/api/mod` endpoints when public mod API access is disabled with `SOLDER_DISABLE_MOD_API=true`
+- `GET /api/mod/{slug}/{version}` responses now include accessible build memberships and their owning modpack metadata
+- Build mod list filtering by mod name, slug, and selected version
+
+### Changed
+
+- Development Compose stack now uses the isolated `technicsolder-dev` project instead of sharing production containers and volumes
+- Password fields now identify current and new credentials correctly to password managers
+- Distributed environment example now enables persistent Redis connections to prevent ephemeral-port exhaustion under sustained high concurrency
+- npm dependency lifecycle scripts are disabled and dependency updates are delayed for seven days to reduce supply-chain exposure; Renovate security updates remain exempt from the delay
+- Updated PHP, frontend, build, and CI dependencies, including Laravel 13.26, Guzzle 7.15, Alpine.js 3.16, Tailwind CSS 4.3, Vite 8.2, Node.js 24.18, `actions/checkout` 7, and `actions/setup-python` 7
+
+### Fixed
+
+- PostCSS and nanoid updated to fix source map path traversal and unbounded generator loop vulnerabilities
+- Delegated user managers can no longer grant permissions they do not hold or manage users with greater permissions or broader modpack access
+- The final `solder_full` user can no longer demote themselves, regardless of their database ID
+- Profile-only and password-only user updates no longer revoke permissions omitted from the request
+- Password changes now require the acting user's current password, including when a manager resets another user's password; malformed password values return a validation error
+- Login throttling now canonicalizes email casing and Unicode variants, preventing equivalent addresses from receiving separate rate-limit buckets
+- Login details, update checks, and password rehashing now occur only after authentication and two-factor challenges complete successfully
+- Users can no longer delete their own accounts
+
 ## [1.1.3] - 2026-04-18
 
 ### Fixed
@@ -152,6 +222,10 @@ All notable changes to Technic Solder will be documented in this file.
 - Error message display for invalid 2FA recovery codes
 - Sidebar overflow when modpack list is long
 
+[1.4.0]: https://github.com/TechnicPack/TechnicSolder/compare/v1.3.1...v1.4.0
+[1.3.1]: https://github.com/TechnicPack/TechnicSolder/compare/v1.3.0...v1.3.1
+[1.3.0]: https://github.com/TechnicPack/TechnicSolder/compare/v1.2.0...v1.3.0
+[1.2.0]: https://github.com/TechnicPack/TechnicSolder/compare/v1.1.3...v1.2.0
 [1.1.3]: https://github.com/TechnicPack/TechnicSolder/compare/v1.1.2...v1.1.3
 [1.1.2]: https://github.com/TechnicPack/TechnicSolder/compare/v1.1.1...v1.1.2
 [1.1.1]: https://github.com/TechnicPack/TechnicSolder/compare/v1.1.0...v1.1.1

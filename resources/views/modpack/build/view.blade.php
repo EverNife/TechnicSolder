@@ -8,24 +8,24 @@
     </div>
 
     {{-- Build info card --}}
-    <div class="bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-200 dark:border-gray-800 mb-6">
-        <div class="px-5 py-4 border-b border-gray-200 dark:border-gray-800 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+    <div class="ui-card mb-6">
+        <div class="ui-card-header flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <span class="font-semibold text-gray-900 dark:text-white">{{ $build->modpack->name }} &mdash; build {{ $build->version }}</span>
             <div class="flex items-center gap-2">
                 <button onclick="window.location.reload()"
-                        class="bg-blue-600 hover:bg-blue-700 text-white dark:bg-blue-500/15 dark:text-blue-400 dark:hover:bg-blue-500/25 font-medium py-1.5 px-3 text-xs rounded-lg transition-colors">
+                        class="ui-btn ui-btn-sm ui-btn-primary">
                     Refresh
                 </button>
                 <a href="{{ url('modpack/build/' . $build->id . '/export') }}"
-                   class="bg-blue-600 hover:bg-blue-700 text-white dark:bg-blue-500/15 dark:text-blue-400 dark:hover:bg-blue-500/25 font-medium py-1.5 px-3 text-xs rounded-lg transition-colors">
+                   class="ui-btn ui-btn-sm ui-btn-primary">
                     Export CSV
                 </a>
                 <a href="{{ url('modpack/build/' . $build->id . '/edit') }}"
-                   class="bg-blue-600 hover:bg-blue-700 text-white dark:bg-blue-500/15 dark:text-blue-400 dark:hover:bg-blue-500/25 font-medium py-1.5 px-3 text-xs rounded-lg transition-colors">
+                   class="ui-btn ui-btn-sm ui-btn-primary">
                     Edit
                 </a>
                 <a href="{{ url('modpack/view/' . $build->modpack->id) }}"
-                   class="bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200 font-medium py-1.5 px-3 text-xs rounded-lg transition-colors">
+                   class="ui-btn ui-btn-sm ui-btn-secondary">
                     Back to modpack
                 </a>
             </div>
@@ -48,6 +48,12 @@
                     <span class="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Required RAM/memory</span>
                     <p class="mt-1 text-sm font-medium text-gray-900 dark:text-white">{{ $build->min_memory ? $build->min_memory . ' MB' : 'Not set' }}</p>
                 </div>
+                @if (config('solder.advanced_mode'))
+                <div class="sm:col-span-2 lg:col-span-4">
+                    <span class="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Mojang Java Runtime Override</span>
+                    <p class="mt-1 text-sm font-medium text-gray-900 dark:text-white">{{ $build->java_runtime ? \App\JavaRuntimesEnum::from($build->java_runtime)->label() : 'Default (no override)' }}</p>
+                </div>
+                @endif
             </div>
         </div>
     </div>
@@ -55,7 +61,7 @@
     {{-- Live build warning --}}
     @if ($build->isLive())
         <div x-data="{ showPanels: false }" class="mb-6">
-            <div class="p-4 rounded-lg bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 text-sm text-yellow-700 dark:text-yellow-400/80">
+            <div class="ui-alert ui-alert-warning p-4">
                 <p>This build is currently published and not marked as private. <strong>You are editing a live build</strong>.</p>
                 <p x-show="!showPanels" class="mt-2">Build management panels have been hidden.
                     <button @click="showPanels = true"
@@ -232,6 +238,7 @@ document.addEventListener('alpine:init', () => {
     Alpine.data('modList', () => ({
         buildId: {{ $build->id }},
         savingAll: false,
+        filter: '',
         mods: @js($build->modversions->sortBy(fn($v) => strtolower($v->mod->pretty_name ?: $v->mod->name))->values()->map(fn($v) => [
             'mod_id' => $v->mod->id,
             'mod_name' => $v->mod->name,
@@ -239,6 +246,24 @@ document.addEventListener('alpine:init', () => {
             'modversion_id' => $v->pivot->modversion_id,
             'versions' => $v->mod->versions->map(fn($ver) => ['id' => $ver->id, 'version' => $ver->version]),
         ])).map(m => ({ ...m, selected_version_id: String(m.modversion_id), just_added: false, changing: false })),
+
+        get filteredMods() {
+            const query = this.filter.trim().toLowerCase();
+
+            if (query === '') {
+                return this.mods;
+            }
+
+            return this.mods.filter(mod => {
+                const selectedVersion = mod.versions.find(version =>
+                    String(version.id) === String(mod.selected_version_id)
+                )?.version ?? '';
+
+                return mod.pretty_name.toLowerCase().includes(query)
+                    || mod.mod_name.toLowerCase().includes(query)
+                    || selectedVersion.toLowerCase().includes(query);
+            });
+        },
 
         get pendingMods() {
             return this.mods.filter(m => String(m.selected_version_id) !== String(m.modversion_id));

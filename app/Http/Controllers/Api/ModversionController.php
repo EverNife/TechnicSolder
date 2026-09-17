@@ -2,7 +2,9 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Http\ApiAuthContext;
 use App\Http\Controllers\Controller;
+use App\Models\Build;
 use App\Models\Mod;
 use App\Models\Modversion;
 use Illuminate\Http\JsonResponse;
@@ -14,9 +16,7 @@ class ModversionController extends Controller
 {
     public function show(string $slug, string $version): JsonResponse
     {
-        if (config('solder.disable_mod_api')) {
-            return response()->json(['error' => 'Mod API has been disabled'], 404);
-        }
+        $auth = ApiAuthContext::fromRequest();
 
         $mod = Cache::remember('mod:'.$slug, now()->addMinutes(5), function () use ($slug) {
             return Mod::with('versions')->where('name', $slug)->first();
@@ -26,9 +26,12 @@ class ModversionController extends Controller
             return response()->json(['error' => 'Mod does not exist'], 404);
         }
 
-        $modVersion = $mod->versions()->where('version', $version)->first();
+        $modVersion = $mod->versions()
+            ->with('builds.modpack')
+            ->where('version', $version)
+            ->first();
 
-        if (! $modVersion) {
+        if (! $modVersion instanceof Modversion) {
             return response()->json(['error' => 'Mod version does not exist'], 404);
         }
 
@@ -39,7 +42,22 @@ class ModversionController extends Controller
             'url',
         ]);
 
-        $perm = auth('sanctum')->user()?->permission;
+        $response['builds'] = $modVersion->builds
+            ->filter(fn (Build $build) => $build->isAccessibleBy($auth))
+            ->sortBy('id')
+            ->values()
+            ->map(fn (Build $build) => [
+                'id' => $build->id,
+                'version' => $build->version,
+                'modpack' => [
+                    'id' => $build->modpack->id,
+                    'name' => $build->modpack->slug,
+                    'display_name' => $build->modpack->name,
+                ],
+            ])
+            ->all();
+
+        $perm = $auth->user?->permission;
         if ($perm?->solder_full || $perm?->mods_manage) {
             $response['notes'] = $modVersion->notes;
         }
