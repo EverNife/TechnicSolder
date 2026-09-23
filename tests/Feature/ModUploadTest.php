@@ -173,7 +173,8 @@ final class ModUploadTest extends TestCase
             ->assertJson(['error' => 'An archive already exists for testmod 2.0. Resend with replace=true to overwrite it.']);
         $this->assertSame(md5($first), md5_file($this->archivePath('testmod', '2.0')));
 
-        $this->upload('testmod', '2.0', ['file' => UploadedFile::fake()->createWithContent('a.zip', $second), 'replace' => true])
+        // Multipart clients send the flag as the string "true", which Laravel's boolean rule would reject.
+        $this->upload('testmod', '2.0', ['file' => UploadedFile::fake()->createWithContent('a.zip', $second), 'replace' => 'true'])
             ->assertStatus(200)
             ->assertJson(['md5' => md5($second)]);
         $this->assertSame(md5($second), md5_file($this->archivePath('testmod', '2.0')));

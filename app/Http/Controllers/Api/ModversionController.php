@@ -141,7 +141,6 @@ class ModversionController extends Controller
 
         $validator = Validator::make($request->all(), [
             'file' => 'required|file|max:'.ModArchiveStore::MAX_KILOBYTES,
-            'replace' => 'sometimes|boolean',
         ]);
 
         if ($validator->fails()) {
