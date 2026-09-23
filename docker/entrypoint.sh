@@ -31,4 +31,11 @@ chgrp -R www-data storage bootstrap/cache
 find storage bootstrap/cache -type d -exec chmod 775 {} \;
 find storage bootstrap/cache -type f -exec chmod 664 {} \;
 
+# Uploads are written by php-fpm as www-data; archives copied in over SSH arrive as root.
+MODS_DIR="${SOLDER_REPO_LOCATION:-/var/www/}"
+MODS_DIR="${MODS_DIR%/}/mods"
+if [ -d "$MODS_DIR" ]; then
+    chown -R www-data:www-data "$MODS_DIR"
+fi
+
 exec php-fpm

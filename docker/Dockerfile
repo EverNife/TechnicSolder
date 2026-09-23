@@ -17,7 +17,8 @@ RUN apt-get update && apt-get install -y \
     && pecl install redis \
     && docker-php-ext-enable redis \
     && rm -rf /var/lib/apt/lists/* \
-    && echo 'memory_limit = 256M' > /usr/local/etc/php/conf.d/memory.ini
+    && echo 'memory_limit = 256M' > /usr/local/etc/php/conf.d/memory.ini \
+    && printf 'upload_max_filesize = 110M\npost_max_size = 112M\n' > /usr/local/etc/php/conf.d/uploads.ini
 
 COPY --from=composer:2.10.3@sha256:a5f59b9fd2faf31218632be4809dc6491761085e8064c31dc3b84378c48c248b /usr/bin/composer /usr/bin/composer
 
