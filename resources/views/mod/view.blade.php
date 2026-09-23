@@ -90,7 +90,13 @@
                                     <input type="text"
                                            x-model="addMd5"
                                            placeholder="MD5 (optional)"
-                                           class="ui-control">
+                                           :disabled="addFileName !== ''"
+                                           class="ui-control disabled:opacity-50">
+                                    <input type="file"
+                                           x-ref="addFile"
+                                           accept=".zip,.jar"
+                                           @change="addFileName = $event.target.files.length ? $event.target.files[0].name : ''"
+                                           class="mt-2 block w-full text-xs text-gray-600 dark:text-gray-400">
                                 </td>
                                 <td class="px-5 py-3">
                                     <template x-if="addVersion">
@@ -105,8 +111,8 @@
                                     <button @click="submitAddVersion()"
                                             :disabled="addLoading || !addVersion"
                                             class="ui-btn ui-btn-sm ui-btn-primary disabled:opacity-50 disabled:cursor-not-allowed">
-                                        <span x-show="!addLoading">Add Version</span>
-                                        <span x-show="addLoading">Adding...</span>
+                                        <span x-show="!addLoading" x-text="addFileName ? 'Upload Version' : 'Add Version'"></span>
+                                        <span x-show="addLoading" x-text="addFileName ? 'Uploading...' : 'Adding...'"></span>
                                     </button>
                                 </td>
                             </tr>
@@ -147,6 +153,14 @@
                                                     <span x-show="!rehashingVersions.includes(row.id)">Rehash</span>
                                                     <span x-show="rehashingVersions.includes(row.id)">...</span>
                                                 </button>
+                                                <button @click="$el.nextElementSibling.click()"
+                                                        :disabled="uploadingVersions.includes(row.id)"
+                                                        class="ui-btn ui-btn-sm ui-btn-secondary disabled:opacity-50 disabled:cursor-not-allowed">
+                                                    <span x-show="!uploadingVersions.includes(row.id)">Upload</span>
+                                                    <span x-show="uploadingVersions.includes(row.id)">Uploading...</span>
+                                                </button>
+                                                <input type="file" accept=".zip,.jar" class="hidden"
+                                                       @change="uploadVersion(row, $event.target)">
                                                 <button @click="deleteVersion(row.id)"
                                                         :disabled="deletingVersions.includes(row.id)"
                                                         class="ui-btn ui-btn-sm ui-btn-danger disabled:opacity-50 disabled:cursor-not-allowed">
@@ -438,8 +452,10 @@
                 addVersion: '',
                 addMd5: '',
                 addLoading: false,
+                addFileName: '',
                 expandedVersions: [],
                 rehashingVersions: [],
+                uploadingVersions: [],
                 deletingVersions: [],
                 rehashAllRunning: false,
                 rehashAllCurrent: 0,
@@ -462,9 +478,101 @@
                     }
                 },
 
+                // Resolves to null when the user declines to replace an archive already on disk.
+                async sendUpload(version, file, replace = false) {
+                    const body = new FormData();
+                    body.append('mod-id', this.modId);
+                    body.append('version', version);
+                    body.append('file', file);
+                    if (replace) body.append('replace', '1');
+
+                    const res = await fetch('{{ url("mod/upload-version") }}', {
+                        method: 'POST',
+                        headers: {
+                            'X-CSRF-TOKEN': window.csrfToken,
+                            'X-Requested-With': 'XMLHttpRequest',
+                        },
+                        body,
+                    });
+
+                    if (res.status === 409 && !replace) {
+                        if (!confirm('An archive already exists for version ' + version + '. Replace it?')) return null;
+                        return this.sendUpload(version, file, true);
+                    }
+
+                    return res.json();
+                },
+
+                applyUpload(data) {
+                    const row = this.rows.find(r => r.id === data.version_id);
+                    if (row) {
+                        row.md5 = data.md5;
+                        row.filesize = data.filesize;
+                        return;
+                    }
+                    this.rows.unshift({
+                        id: data.version_id,
+                        version: data.version,
+                        md5: data.md5,
+                        filesize: data.filesize,
+                        url: this.mirrorUrl + 'mods/' + this.modName + '/' + this.modName + '-' + data.version + '.zip',
+                        notes: '',
+                        savingNotes: false,
+                        builds: [],
+                        hiddenCount: 0,
+                    });
+                },
+
+                async uploadVersion(row, input) {
+                    const file = input.files[0];
+                    input.value = '';
+                    if (!file) return;
+                    this.uploadingVersions.push(row.id);
+
+                    try {
+                        const data = await this.sendUpload(row.version, file);
+                        if (!data) return;
+
+                        if (data.status === 'success') {
+                            this.applyUpload(data);
+                            Alpine.store('toasts').add('Uploaded ' + file.name + ' to ' + row.version, 'success');
+                        } else {
+                            Alpine.store('toasts').add('Error: ' + data.reason, 'error');
+                        }
+                    } catch (err) {
+                        Alpine.store('toasts').add('Request failed: ' + err.message, 'error');
+                    } finally {
+                        this.uploadingVersions = this.uploadingVersions.filter(id => id !== row.id);
+                    }
+                },
+
                 async submitAddVersion() {
                     if (!this.addVersion) return;
                     this.addLoading = true;
+
+                    const file = this.$refs.addFile.files[0];
+                    if (file) {
+                        try {
+                            const data = await this.sendUpload(this.addVersion, file);
+                            if (!data) return;
+
+                            if (data.status === 'success') {
+                                this.applyUpload(data);
+                                Alpine.store('toasts').add('Uploaded mod version ' + data.version, 'success');
+                                this.addVersion = '';
+                                this.addMd5 = '';
+                                this.addFileName = '';
+                                this.$refs.addFile.value = '';
+                            } else {
+                                Alpine.store('toasts').add('Error: ' + data.reason, 'error');
+                            }
+                        } catch (err) {
+                            Alpine.store('toasts').add('Request failed: ' + err.message, 'error');
+                        } finally {
+                            this.addLoading = false;
+                        }
+                        return;
+                    }
 
                     try {
                         const res = await fetch('{{ url("mod/add-version") }}', {
