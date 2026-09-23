@@ -203,7 +203,7 @@ For development, use `compose.dev.yml` which includes a named `vendor` volume (s
 docker compose -f compose.dev.yml up -d
 ```
 
-The development stack is accessible on port **8080** by default.
+The development stack is accessible on port **8434** by default.
 
 ## HTTPS and Reverse Proxies
 

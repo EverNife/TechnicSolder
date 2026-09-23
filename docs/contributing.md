@@ -2,7 +2,7 @@
 
 ## Development Environment
 
-The dev environment uses Docker with PostgreSQL and Redis. It runs on port 8080 to avoid conflicting with a production instance.
+The dev environment uses Docker with PostgreSQL and Redis. It runs on port 8434 to avoid conflicting with a production instance.
 
 ### Prerequisites
 
@@ -25,7 +25,7 @@ The container entrypoint (`docker/dev-entrypoint.sh`) runs on every start and ha
 4. Conditionally builds frontend assets (only if `public/build/` is missing and Node is available in the container)
 5. Sets file permissions
 
-Solder is then available at [http://localhost:8080](http://localhost:8080).
+Solder is then available at [http://localhost:8434](http://localhost:8434).
 
 ### Create the Admin User
 
@@ -41,7 +41,7 @@ This will prompt for an email and password interactively.
 
 | | Production (`compose.yml`) | Development (`compose.dev.yml`) |
 |---|---|---|
-| Port | 80 | 8080 |
+| Port | 80 | 8434 |
 | Database | MariaDB | PostgreSQL |
 | Dev dependencies | Excluded (`--no-dev`) | Included |
 | `APP_DEBUG` | `false` | `true` |

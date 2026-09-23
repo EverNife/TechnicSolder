@@ -11,7 +11,8 @@ services:
     depends_on:
       - solder
     ports:
-      - "8080:80"
+      # Localhost only, like postgres and redis; 8434 keeps clear of the common 8080.
+      - "127.0.0.1:8434:80"
     volumes:
       - ./docker/default.conf:/etc/nginx/conf.d/default.conf:ro
       - .:/var/www/html:ro
