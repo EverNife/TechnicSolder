@@ -317,6 +317,18 @@ final class ModUploadTest extends TestCase
         $this->assertSame([], $this->filesUnderBase());
     }
 
+    public function test_mod_page_offers_upload_for_a_new_version(): void
+    {
+        $mod = Mod::where('name', 'testmod')->first();
+
+        $this->actingAs(User::find(1))
+            ->get('/mod/view/'.$mod->id)
+            ->assertOk()
+            ->assertSee('Add with Upload')
+            ->assertSee('uploadNewVersion($event.target)', false)
+            ->assertSee(url('mod/upload-version'), false);
+    }
+
     public function test_web_upload_requires_ajax(): void
     {
         $this->actingAs(User::find(1))

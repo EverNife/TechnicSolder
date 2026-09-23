@@ -90,13 +90,7 @@
                                     <input type="text"
                                            x-model="addMd5"
                                            placeholder="MD5 (optional)"
-                                           :disabled="addFileName !== ''"
-                                           class="ui-control disabled:opacity-50">
-                                    <input type="file"
-                                           x-ref="addFile"
-                                           accept=".zip,.jar"
-                                           @change="addFileName = $event.target.files.length ? $event.target.files[0].name : ''"
-                                           class="mt-2 block w-full text-xs text-gray-600 dark:text-gray-400">
+                                           class="ui-control">
                                 </td>
                                 <td class="px-5 py-3">
                                     <template x-if="addVersion">
@@ -108,12 +102,23 @@
                                 </td>
                                 <td class="px-5 py-3 text-gray-400 dark:text-gray-500 text-xs">N/A</td>
                                 <td class="px-5 py-3">
-                                    <button @click="submitAddVersion()"
-                                            :disabled="addLoading || !addVersion"
-                                            class="ui-btn ui-btn-sm ui-btn-primary disabled:opacity-50 disabled:cursor-not-allowed">
-                                        <span x-show="!addLoading" x-text="addFileName ? 'Upload Version' : 'Add Version'"></span>
-                                        <span x-show="addLoading" x-text="addFileName ? 'Uploading...' : 'Adding...'"></span>
-                                    </button>
+                                    <div class="flex items-center gap-2">
+                                        <button @click="submitAddVersion()"
+                                                :disabled="addLoading || addUploading || !addVersion"
+                                                class="ui-btn ui-btn-sm ui-btn-primary disabled:opacity-50 disabled:cursor-not-allowed">
+                                            <span x-show="!addLoading">Add Version</span>
+                                            <span x-show="addLoading">Adding...</span>
+                                        </button>
+                                        <button @click="$refs.addFile.click()"
+                                                :disabled="addLoading || addUploading || !addVersion"
+                                                title="Pick a .zip or .jar and upload it as this version"
+                                                class="ui-btn ui-btn-sm ui-btn-success whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed">
+                                            <span x-show="!addUploading">Add with Upload</span>
+                                            <span x-show="addUploading">Uploading...</span>
+                                        </button>
+                                        <input type="file" x-ref="addFile" accept=".zip,.jar" class="hidden"
+                                               @change="uploadNewVersion($event.target)">
+                                    </div>
                                 </td>
                             </tr>
                         </tbody>
@@ -452,7 +457,7 @@
                 addVersion: '',
                 addMd5: '',
                 addLoading: false,
-                addFileName: '',
+                addUploading: false,
                 expandedVersions: [],
                 rehashingVersions: [],
                 uploadingVersions: [],
@@ -546,33 +551,34 @@
                     }
                 },
 
+                async uploadNewVersion(input) {
+                    const file = input.files[0];
+                    input.value = '';
+                    if (!file || !this.addVersion) return;
+                    this.addUploading = true;
+
+                    try {
+                        const data = await this.sendUpload(this.addVersion, file);
+                        if (!data) return;
+
+                        if (data.status === 'success') {
+                            this.applyUpload(data);
+                            Alpine.store('toasts').add('Uploaded ' + file.name + ' as version ' + data.version, 'success');
+                            this.addVersion = '';
+                            this.addMd5 = '';
+                        } else {
+                            Alpine.store('toasts').add('Error: ' + data.reason, 'error');
+                        }
+                    } catch (err) {
+                        Alpine.store('toasts').add('Request failed: ' + err.message, 'error');
+                    } finally {
+                        this.addUploading = false;
+                    }
+                },
+
                 async submitAddVersion() {
                     if (!this.addVersion) return;
                     this.addLoading = true;
-
-                    const file = this.$refs.addFile.files[0];
-                    if (file) {
-                        try {
-                            const data = await this.sendUpload(this.addVersion, file);
-                            if (!data) return;
-
-                            if (data.status === 'success') {
-                                this.applyUpload(data);
-                                Alpine.store('toasts').add('Uploaded mod version ' + data.version, 'success');
-                                this.addVersion = '';
-                                this.addMd5 = '';
-                                this.addFileName = '';
-                                this.$refs.addFile.value = '';
-                            } else {
-                                Alpine.store('toasts').add('Error: ' + data.reason, 'error');
-                            }
-                        } catch (err) {
-                            Alpine.store('toasts').add('Request failed: ' + err.message, 'error');
-                        } finally {
-                            this.addLoading = false;
-                        }
-                        return;
-                    }
 
                     try {
                         const res = await fetch('{{ url("mod/add-version") }}', {
