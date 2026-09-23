@@ -4,6 +4,8 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\ApiAuthContext;
 use App\Http\Controllers\Controller;
+use App\Libraries\ArchiveExistsException;
+use App\Libraries\ModArchiveStore;
 use App\Models\Build;
 use App\Models\Mod;
 use App\Models\Modversion;
@@ -11,6 +13,8 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Validator;
+use InvalidArgumentException;
+use RuntimeException;
 
 class ModversionController extends Controller
 {
@@ -117,6 +121,59 @@ class ModversionController extends Controller
         Cache::forget('mod:'.$slug);
 
         return response()->json($modversion);
+    }
+
+    /**
+     * Store the archive for a mod version, creating the version when it does not exist yet.
+     */
+    public function upload(Request $request, ModArchiveStore $store, string $slug, string $version): JsonResponse
+    {
+        $mod = Mod::where('name', $slug)->first();
+
+        if (! $mod) {
+            return response()->json(['error' => 'Mod not found. Create it first with POST /api/mod.'], 404);
+        }
+
+        /** @var Modversion|null $modversion */
+        $modversion = $mod->versions()->where('version', $version)->first();
+
+        $this->authorize($modversion ? 'update' : 'create', Modversion::class);
+
+        $validator = Validator::make($request->all(), [
+            'file' => 'required|file|max:'.ModArchiveStore::MAX_KILOBYTES,
+            'replace' => 'sometimes|boolean',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['error' => $validator->errors()], 422);
+        }
+
+        try {
+            $archive = $store->store($mod, $version, $request->file('file'), $request->boolean('replace'));
+        } catch (InvalidArgumentException $e) {
+            return response()->json(['error' => $e->getMessage()], 422);
+        } catch (ArchiveExistsException) {
+            return response()->json(['error' => "An archive already exists for {$slug} {$version}. Resend with replace=true to overwrite it."], 409);
+        } catch (RuntimeException $e) {
+            return response()->json(['error' => $e->getMessage()], 409);
+        }
+
+        if ($modversion) {
+            $modversion->update($archive);
+        } else {
+            $modversion = $mod->versions()->create($archive + [
+                'version' => $version,
+                'notes' => $request->input('notes'),
+            ]);
+        }
+
+        Cache::forget('mod:'.$slug);
+        Cache::forget('mods');
+
+        return response()->json(
+            $modversion->only(['id', 'version', 'md5', 'filesize', 'url']),
+            $modversion->wasRecentlyCreated ? 201 : 200
+        );
     }
 
     public function destroy(string $slug, string $version): JsonResponse

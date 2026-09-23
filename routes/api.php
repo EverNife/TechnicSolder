@@ -61,6 +61,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::delete('mod/{slug}', [ModController::class, 'destroy']);
 
     Route::post('mod/{slug}/version', [ModversionController::class, 'store']);
+    Route::post('mod/{slug}/{version}/file', [ModversionController::class, 'upload']);
     Route::put('mod/{slug}/{version}', [ModversionController::class, 'update']);
     Route::delete('mod/{slug}/{version}', [ModversionController::class, 'destroy']);
 

@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers;
 
+use App\Libraries\ArchiveExistsException;
+use App\Libraries\ModArchiveStore;
 use App\Libraries\UrlUtils;
 use App\Models\Mod;
 use App\Models\Modversion;
@@ -15,6 +17,8 @@ use Illuminate\Support\Facades\Request;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
 use Illuminate\View\View;
+use InvalidArgumentException;
+use RuntimeException;
 
 class ModController extends Controller
 {
@@ -314,6 +318,74 @@ class ModController extends Controller
         return response()->json([
             'status' => 'success',
             'version' => $ver->version,
+            'md5' => $ver->md5,
+            'filesize' => $ver->humanFilesize(),
+        ]);
+    }
+
+    /**
+     * Store an uploaded archive for a mod version, creating the version when it does not exist yet.
+     * An archive already on disk answers 409 so the page can ask before resending with replace.
+     */
+    public function anyUploadVersion(ModArchiveStore $store): JsonResponse
+    {
+        if (! Request::ajax()) {
+            abort(404);
+        }
+
+        $mod = Mod::find(Request::input('mod-id'));
+        $version = Request::input('version');
+        if (empty($mod) || ! is_string($version) || $version === '') {
+            return response()->json([
+                'status' => 'error',
+                'reason' => 'Missing Post Data',
+            ]);
+        }
+
+        /** @var Modversion|null $ver */
+        $ver = $mod->versions()->where('version', $version)->first();
+
+        $this->authorize($ver ? 'update' : 'create', Modversion::class);
+
+        $validator = Validator::make(Request::all(), [
+            'file' => 'required|file|max:'.ModArchiveStore::MAX_KILOBYTES,
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'status' => 'error',
+                'reason' => $validator->errors()->first(),
+            ]);
+        }
+
+        try {
+            $archive = $store->store($mod, $version, Request::file('file'), Request::boolean('replace'));
+        } catch (ArchiveExistsException) {
+            return response()->json([
+                'status' => 'error',
+                'reason' => 'An archive already exists for this version.',
+            ], 409);
+        } catch (RuntimeException|InvalidArgumentException $e) {
+            return response()->json([
+                'status' => 'error',
+                'reason' => $e->getMessage(),
+            ]);
+        }
+
+        if ($ver) {
+            $ver->update($archive);
+        } else {
+            /** @var Modversion $ver */
+            $ver = $mod->versions()->create($archive + ['version' => $version]);
+        }
+
+        Cache::forget('mod:'.$mod->name);
+        Cache::forget('mods');
+
+        return response()->json([
+            'status' => 'success',
+            'version' => $ver->version,
+            'version_id' => $ver->id,
             'md5' => $ver->md5,
             'filesize' => $ver->humanFilesize(),
         ]);
