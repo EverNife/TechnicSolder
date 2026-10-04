@@ -62,10 +62,10 @@ PYTHONIOENCODING=utf-8 python import_build.py <modpack-slug> <build-version>
   resourcepack; the new API answers 422): the oldest version keeps the slug, each other one becomes
   its own mod `<slug>-<version>` with pretty name `<Name> (<version>)`. Version string and archive
   are unchanged, so the launcher gets the same files.
-- **Archive over 95 MB** (Cloudflare refuses bodies over 100 MB with `413`): the version is
-  registered with the old md5/filesize only and attached; the run prints a `! COPY ON THE DOKPLOY
-  HOST:` line - a `wget` from the old server into the mods bind mount plus the md5 to expect. The
-  owner runs it on the host (SSH). Rerunning the import drops the line once the file is served.
+- **Archive over 95 MB** (Cloudflare refuses bodies over 100 MB with `413`): sent in 90 MB slices
+  through `POST /api/mod/{slug}/{version}/file/parts` (`docs/api/write/mods.md`), which joins them
+  and stores the file like a single upload. A version that exists with the right md5 but whose
+  file the mirror does not serve is uploaded again.
 - **Archive gone from the old server** (`404` on the download): the mod is skipped, the rest of
   the build goes on, the run ends with `! MISSING ON OLD SERVER` and exit 1. Ask the owner: another
   version of the mod, a file from them, or leave it out.

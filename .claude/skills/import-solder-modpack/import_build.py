@@ -26,10 +26,10 @@ SRC = os.environ.get("SOLDER_SRC", "https://solder.finalcraft.com.br")
 DST = os.environ.get("SOLDER_DST", "https://solder.finaltech.com.br")
 CACHE = Path(os.environ.get("SOLDER_CACHE", Path.home() / ".solder-import-cache"))
 UA = {"User-Agent": "solder-import/1", "Accept": "application/json"}
-# Cloudflare in front of the new Solder refuses request bodies over 100 MB; stay clear of it.
+# Cloudflare in front of the new Solder refuses request bodies over 100 MB: archives above
+# MAX_UPLOAD go through the parts endpoint in PART_SIZE slices.
 MAX_UPLOAD = 95_000_000
-# Host path of the new Solder's mods bind mount (Dokploy compose solder-kolzij).
-DST_MODS_DIR = os.environ.get("SOLDER_DST_MODS_DIR", "/etc/dokploy/compose/solder-kolzij/files/mods")
+PART_SIZE = 90_000_000
 problems: list[str] = []
 
 
@@ -173,46 +173,51 @@ def served(url: str) -> bool:
         return False
 
 
-def ensure_big_version(mod: dict, status: int, existing: dict, dry: bool) -> None:
-    """Too big to upload through Cloudflare: register md5/filesize only and leave a command that
-    pulls the archive from the old server straight into the new mods directory."""
-    name, version = mod["name"], mod["version"]
-    if status != 200:
-        print(f"+ register {name} {version} ({mod['filesize'] // 1_000_000} MB, file copied on the host)")
-        if not dry:
-            existing = must(*call("POST", f"{DST}/api/mod/{q(name)}/version", auth=True, body={
-                "version": version, "md5": mod["md5"], "filesize": mod["filesize"],
-            }), f"register {name} {version}")
-    elif existing.get("md5") != mod["md5"]:
-        problems.append(f"MD5 DIFFERS for big archive {name} {version}: fix it by hand")
-    dst_url = f"{DST}/mods/{q(name)}/{q(name)}-{q(version)}.zip"
-    if dry or not served(dst_url):
-        target = f"{DST_MODS_DIR}/{name}/{name}-{version}.zip"
-        problems.append(f"COPY ON THE DOKPLOY HOST: mkdir -p '{DST_MODS_DIR}/{name}' && "
-                        f"wget -O '{target}' '{mod['url']}' && md5sum '{target}'  # expect {mod['md5']}")
+def upload_in_parts(url: str, path: Path, form: dict) -> tuple[int, dict]:
+    """Send the archive through the parts endpoint in PART_SIZE slices; the response of the slice
+    that completes it is the same as a single upload's."""
+    parts = -(-path.stat().st_size // PART_SIZE)
+    with path.open("rb") as f:
+        for part in range(parts):
+            piece = path.with_name(f"{path.name}.part{part}")
+            piece.write_bytes(f.read(PART_SIZE))
+            try:
+                result = call("POST", f"{url}/parts", auth=True, files={"file": piece},
+                              body={**form, "filename": path.name, "parts": parts, "part": part})
+            finally:
+                piece.unlink()
+            if result[0] not in (200, 201, 202):
+                return result
+    return result
 
 
 def ensure_version(mod: dict, dry: bool) -> bool:
     """False when the archive cannot be had, so the mod must not be attached."""
     name, version = mod["name"], mod["version"]
+    big = mod["filesize"] > MAX_UPLOAD
     status, existing = call("GET", f"{DST}/api/mod/{q(name)}/{q(version)}", auth=True)
-    if mod["filesize"] > MAX_UPLOAD:
-        ensure_big_version(mod, status, existing, dry)
-        return True
-    if status == 200 and existing.get("md5") == mod["md5"]:
+    # A big version may have been registered by md5 alone, so also check the file is served.
+    if status == 200 and existing.get("md5") == mod["md5"] and (
+            not big or served(f"{DST}/mods/{q(name)}/{q(name)}-{q(version)}.zip")):
         return True
     path = fetch_archive(mod)
     if path is None:
         return False
-    print(f"+ upload {name} {version} ({path.stat().st_size // 1024} KB){' replace' if status == 200 else ''}")
+    print(f"+ upload {name} {version} ({path.stat().st_size // 1024} KB)"
+          f"{' in parts' if big else ''}{' replace' if status == 200 else ''}")
     if not dry:
-        form = {"replace": "true"} if status == 200 else {}
         url = f"{DST}/api/mod/{q(name)}/{q(version)}/file"
-        result = call("POST", url, auth=True, body=form, files={"file": path})
+
+        def send(form: dict) -> tuple[int, dict]:
+            if big:
+                return upload_in_parts(url, path, form)
+            return call("POST", url, auth=True, body=form, files={"file": path})
+
+        result = send({"replace": "true"} if status == 200 else {})
         if result[0] == 409 and status != 200:
             # An orphan archive left on disk by a deleted version; the old server's copy wins.
-            print(f"  (orphan archive on disk, replacing)")
-            result = call("POST", url, auth=True, body={"replace": "true"}, files={"file": path})
+            print("  (orphan archive on disk, replacing)")
+            result = send({"replace": "true"})
         must(*result, f"upload {name} {version}")
     return True
 
