@@ -105,7 +105,7 @@
                                     <div class="flex items-center gap-2">
                                         <button @click="submitAddVersion()"
                                                 :disabled="addLoading || addUploading || !addVersion"
-                                                class="ui-btn ui-btn-sm ui-btn-primary disabled:opacity-50 disabled:cursor-not-allowed">
+                                                class="ui-btn ui-btn-sm ui-btn-primary whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed">
                                             <span x-show="!addLoading">Add Version</span>
                                             <span x-show="addLoading">Adding...</span>
                                         </button>
