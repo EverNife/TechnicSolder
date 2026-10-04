@@ -359,6 +359,49 @@ For each local archive:
 
 ---
 
+## POST /api/mod/{slug}/{version}/file/parts
+
+Upload an archive in slices, for files a proxy in front of Solder refuses in one request (Cloudflare caps request bodies at 100 MB). Cut the file into `parts` byte ranges and send each one; they may arrive in any order and a slice can be resent. When the last missing slice arrives, the slices are joined and stored exactly like [`POST /api/mod/{slug}/{version}/file`](#post-apimodslugversionfile): same validation, same `replace` and `notes`, same response.
+
+**Permission required:** `mods_manage`
+
+### Request Body (`multipart/form-data`)
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `file` | file | Yes | This slice, at most 100 MB. |
+| `filename` | string | Yes | Name of the whole archive (`.zip` or `.jar`); identifies the upload together with `parts`. |
+| `parts` | integer | Yes | Number of slices, 2 to 20. |
+| `part` | integer | Yes | Index of this slice, from `0` to `parts - 1`. |
+| `replace` | boolean | No | As for the single upload; read from the slice that completes the archive. |
+| `notes` | string | No | As for the single upload; read from the slice that completes the archive. |
+
+### Example Requests
+
+```bash
+split -b 90M -d -a 2 pixelmon.zip part-     # part-00, part-01, ...
+for i in 0 1 2 3 4; do
+  curl -X POST https://solder.example.com/api/mod/pixelmon/reforged-9.1.3/file/parts \
+    -H "Authorization: Bearer YOUR_TOKEN" \
+    -F "file=@part-0$i" -F "filename=pixelmon.zip" -F "parts=5" -F "part=$i"
+done
+```
+
+### Responses
+
+**Slice stored, others still missing (202):**
+
+```json
+{
+  "received": 3,
+  "parts": 5
+}
+```
+
+**Last slice arrived:** the responses of the single upload — `201`/`200` with the version, or its `409`/`422` errors. The slices are deleted either way, so a failed archive is sent again from the first slice.
+
+---
+
 ## DELETE /api/mod/{slug}/{version}
 
 Delete a specific version of a mod.

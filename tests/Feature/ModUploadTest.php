@@ -351,4 +351,74 @@ final class ModUploadTest extends TestCase
 
         $this->assertSame([], $this->filesUnderBase());
     }
+
+    /**
+     * @return list<string>
+     */
+    private function slices(string $content, int $parts): array
+    {
+        return str_split($content, (int) ceil(strlen($content) / $parts));
+    }
+
+    private function uploadPart(string $slug, string $version, string $slice, int $part, int $parts, string $filename = 'big.zip'): TestResponse
+    {
+        return $this->postJson("api/mod/{$slug}/{$version}/file/parts", [
+            'file' => UploadedFile::fake()->createWithContent('blob', $slice),
+            'filename' => $filename,
+            'part' => $part,
+            'parts' => $parts,
+        ], ['Authorization' => 'Bearer '.$this->token]);
+    }
+
+    private function partsDirIsEmpty(): bool
+    {
+        return glob(sys_get_temp_dir().'/solder-upload-parts-*') === [];
+    }
+
+    public function test_api_parts_in_any_order_join_into_the_archive(): void
+    {
+        $content = $this->zipContent(['mods/big.jar' => random_bytes(4096)]);
+        [$first, $second, $third] = $this->slices($content, 3);
+
+        $this->uploadPart('testmod', '2.0', $third, 2, 3)->assertStatus(202)->assertJson(['received' => 1, 'parts' => 3]);
+        $this->uploadPart('testmod', '2.0', $first, 0, 3)->assertStatus(202)->assertJson(['received' => 2, 'parts' => 3]);
+        $this->assertFileDoesNotExist($this->archivePath('testmod', '2.0'));
+
+        $this->uploadPart('testmod', '2.0', $second, 1, 3)->assertStatus(201)->assertJson([
+            'version' => '2.0',
+            'md5' => md5($content),
+            'filesize' => strlen($content),
+        ]);
+        $this->assertSame(md5($content), md5_file($this->archivePath('testmod', '2.0')));
+        $this->assertDatabaseHas('modversions', ['version' => '2.0', 'md5' => md5($content)]);
+        $this->assertTrue($this->partsDirIsEmpty());
+    }
+
+    public function test_api_parts_that_join_into_no_zip_are_refused_and_dropped(): void
+    {
+        [$first, $second] = $this->slices('definitely not a zip archive', 2);
+
+        $this->uploadPart('testmod', '2.0', $first, 0, 2)->assertStatus(202);
+        $this->uploadPart('testmod', '2.0', $second, 1, 2)->assertStatus(422);
+
+        $this->assertFileDoesNotExist($this->archivePath('testmod', '2.0'));
+        $this->assertTrue($this->partsDirIsEmpty());
+    }
+
+    public function test_api_part_index_must_be_below_parts(): void
+    {
+        $this->uploadPart('testmod', '2.0', 'x', 2, 2)->assertStatus(422)->assertJsonValidationErrors(['part'], 'error');
+    }
+
+    public function test_api_parts_denied_without_mods_manage(): void
+    {
+        $token = $this->userWithPermissions(['mods_create' => true])->createToken('test')->plainTextToken;
+
+        $this->postJson('api/mod/testmod/1.0/file/parts', [
+            'file' => UploadedFile::fake()->createWithContent('blob', 'x'),
+            'filename' => 'big.zip',
+            'part' => 0,
+            'parts' => 2,
+        ], ['Authorization' => 'Bearer '.$token])->assertForbidden();
+    }
 }
